@@ -2,13 +2,24 @@
 
 package server
 
-import "github.com/gin-gonic/gin"
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
 
 func StartServer() {
 	router := gin.Default()
 
-	router.POST("/api/connection", PostConnection)
+	router.GET("/api/ping", func(c *gin.Context) {
+		c.String(http.StatusOK, "pong")
+	})
 
+	router.POST("/api/ping", func(c *gin.Context) {
+		c.String(http.StatusOK, "post pong")
+	})
+
+	router.POST("/api/connection", PostConnection)
 	router.GET("/api/software", GetSoftware)
 	router.GET("/api/software/:id", GetSoftwareId)
 	router.POST("/api/software", PostSoftware)

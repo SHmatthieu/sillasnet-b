@@ -10,6 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var ERROR_REQUEST_MSG string = "error request"
+var ERROR_FORMAT_MSG string = "error request format"
+var ERROR_ID_MSG string = "error id"
+
 type GetRequestData struct {
 	Name  string
 	Token string
@@ -22,6 +26,7 @@ type PostSoftwareRequest struct {
 }
 
 type Software struct {
+	ID      uint
 	Name    string
 	Version string
 }
@@ -33,6 +38,7 @@ type PostHardwareRequest struct {
 }
 
 type Hardware struct {
+	ID      uint
 	Name    string
 	Version string
 }
@@ -44,26 +50,23 @@ type PostSupplierRequest struct {
 }
 
 type Supplier struct {
+	ID   uint
 	Name string
 }
 
-func GetUserFromRequest(row []byte) (*database.User, error) {
+func GetUserFromRequest(c *gin.Context) (*database.User, error) {
 
-	var req GetRequestData
-	err := json.Unmarshal(row, &req)
+	name := c.Request.Header.Get("name")
+	token := c.Request.Header.Get("token")
+
+	user, err := database.GetUserByName(name)
 	if err != nil {
-		return nil, errors.New("error request")
+		return nil, errors.New(ERROR_REQUEST_MSG)
 
 	}
 
-	user, err := database.GetUserByName(req.Name)
-	if err != nil {
-		return nil, errors.New("error request")
-
-	}
-
-	if user.Token != req.Token {
-		return nil, errors.New("error request")
+	if user.Token != token {
+		return nil, errors.New(ERROR_REQUEST_MSG)
 
 	}
 
@@ -71,23 +74,23 @@ func GetUserFromRequest(row []byte) (*database.User, error) {
 }
 
 func GetSoftware(c *gin.Context) {
-	row, err := c.GetRawData()
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "error request format",
-		})
-		return
-	}
-	user, err := GetUserFromRequest(row)
+
+	user, err := GetUserFromRequest(c)
 
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
 
-	softwares, err := user.GetSoftwares()
+	softwares := make([]Software, len(user.Softwares))
+	for i := range user.Softwares {
+		softwares[i].Name = user.Softwares[i].Name
+		softwares[i].Version = user.Softwares[i].Version
+		softwares[i].ID = user.Softwares[i].ID
+
+	}
 	if err != nil {
 		c.JSON(400, gin.H{
 			"message": "error software list",
@@ -102,17 +105,11 @@ func GetSoftware(c *gin.Context) {
 }
 
 func GetSoftwareId(c *gin.Context) {
-	row, err := c.GetRawData()
+	user, err := GetUserFromRequest(c)
+
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
-		})
-		return
-	}
-	user, err := GetUserFromRequest(row)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
@@ -120,21 +117,21 @@ func GetSoftwareId(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error id",
+			"message": ERROR_ID_MSG,
 		})
 		return
 	}
-	software, err := user.GetSoftwareById(id)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "software doesnt exist",
-		})
-		return
+	for _, software := range user.Softwares {
+		if software.ID == uint(id) {
+			c.JSON(200, gin.H{
+				"message":  "ok",
+				"software": Software{Name: software.Name, Version: software.Version, ID: software.ID},
+			})
+			return
+		}
 	}
-
-	c.JSON(200, gin.H{
-		"message":  "ok",
-		"software": software,
+	c.JSON(400, gin.H{
+		"message": "software doesnt exist",
 	})
 }
 
@@ -142,21 +139,22 @@ func PostSoftware(c *gin.Context) {
 	row, err := c.GetRawData()
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
-	user, err := GetUserFromRequest(row)
+	user, err := GetUserFromRequest(c)
+
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
 
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
@@ -172,8 +170,7 @@ func PostSoftware(c *gin.Context) {
 	}
 
 	for i, software := range req.Softwares {
-		dbSoft := &database.Software{Name: software.Name, Version: software.Version}
-		err := dbSoft.AddInDB()
+		dbSoft := database.GetSoftware(software.Name, software.Version)
 		if err != nil {
 			c.JSON(400, gin.H{
 				"message": fmt.Sprintf("error software %d", i),
@@ -189,22 +186,22 @@ func PostSoftware(c *gin.Context) {
 }
 
 func GetHardware(c *gin.Context) {
-	row, err := c.GetRawData()
+	user, err := GetUserFromRequest(c)
+
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
-		})
-		return
-	}
-	user, err := GetUserFromRequest(row)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
 
-	hardwares, err := user.GetHarwares()
+	hardwares := make([]Hardware, len(user.Hardwares))
+	for i := range user.Hardwares {
+		hardwares[i].Name = user.Hardwares[i].Name
+		hardwares[i].Version = user.Hardwares[i].Version
+		hardwares[i].ID = user.Hardwares[i].ID
+
+	}
 	if err != nil {
 		c.JSON(400, gin.H{
 			"message": "error hardware list",
@@ -219,17 +216,11 @@ func GetHardware(c *gin.Context) {
 }
 
 func GetHardwareId(c *gin.Context) {
-	row, err := c.GetRawData()
+	user, err := GetUserFromRequest(c)
+
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
-		})
-		return
-	}
-	user, err := GetUserFromRequest(row)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
@@ -237,21 +228,21 @@ func GetHardwareId(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error id",
+			"message": ERROR_ID_MSG,
 		})
 		return
 	}
-	hardware, err := user.GetHardwareById(id)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "hardware doesnt exist",
-		})
-		return
+	for _, hardware := range user.Hardwares {
+		if hardware.ID == uint(id) {
+			c.JSON(200, gin.H{
+				"message":  "ok",
+				"hardware": Hardware{Name: hardware.Name, Version: hardware.Version, ID: hardware.ID},
+			})
+			return
+		}
 	}
-
-	c.JSON(200, gin.H{
-		"message":  "ok",
-		"hardware": hardware,
+	c.JSON(400, gin.H{
+		"message": "hardware doesnt exist",
 	})
 }
 
@@ -259,21 +250,22 @@ func PostHardware(c *gin.Context) {
 	row, err := c.GetRawData()
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
-	user, err := GetUserFromRequest(row)
+	user, err := GetUserFromRequest(c)
+
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
 
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
@@ -289,8 +281,7 @@ func PostHardware(c *gin.Context) {
 	}
 
 	for i, hardware := range req.Hardwares {
-		dbHard := &database.Hardware{Name: hardware.Name, Version: hardware.Version}
-		err := dbHard.AddInDB()
+		dbHard := database.GetHardware(hardware.Name, hardware.Version)
 		if err != nil {
 			fmt.Printf("%v\n", err)
 			c.JSON(400, gin.H{
@@ -298,7 +289,7 @@ func PostHardware(c *gin.Context) {
 			})
 			return
 		}
-		user.AddHardware(dbHard)
+		user.Addhardware(dbHard)
 	}
 
 	c.JSON(200, gin.H{
@@ -307,22 +298,21 @@ func PostHardware(c *gin.Context) {
 }
 
 func GetSupplier(c *gin.Context) {
-	row, err := c.GetRawData()
+	user, err := GetUserFromRequest(c)
+
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
-		})
-		return
-	}
-	user, err := GetUserFromRequest(row)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
 
-	suppliers, err := user.GetSuppliers()
+	suppliers := make([]Supplier, len(user.Suppliers))
+	for i := range user.Suppliers {
+		suppliers[i].Name = user.Suppliers[i].Name
+		suppliers[i].ID = user.Suppliers[i].ID
+
+	}
 	if err != nil {
 		c.JSON(400, gin.H{
 			"message": "error suppliers list",
@@ -337,17 +327,11 @@ func GetSupplier(c *gin.Context) {
 }
 
 func GetSupplierById(c *gin.Context) {
-	row, err := c.GetRawData()
+	user, err := GetUserFromRequest(c)
+
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
-		})
-		return
-	}
-	user, err := GetUserFromRequest(row)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
@@ -355,21 +339,21 @@ func GetSupplierById(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error id",
+			"message": ERROR_ID_MSG,
 		})
 		return
 	}
-	supplier, err := user.GetSupplierById(id)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "supplier doesnt exist",
-		})
-		return
+	for _, supplier := range user.Suppliers {
+		if supplier.ID == uint(id) {
+			c.JSON(200, gin.H{
+				"message":  "ok",
+				"supplier": Software{Name: supplier.Name, ID: supplier.ID},
+			})
+			return
+		}
 	}
-
-	c.JSON(200, gin.H{
-		"message":  "ok",
-		"supplier": supplier,
+	c.JSON(400, gin.H{
+		"message": "supplier doesnt exist",
 	})
 }
 
@@ -377,21 +361,22 @@ func PostSupplier(c *gin.Context) {
 	row, err := c.GetRawData()
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
-	user, err := GetUserFromRequest(row)
+	user, err := GetUserFromRequest(c)
+
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
 
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message": "error request format",
+			"message": ERROR_FORMAT_MSG,
 		})
 		return
 	}
@@ -407,8 +392,7 @@ func PostSupplier(c *gin.Context) {
 	}
 
 	for i, supplier := range req.Suppliers {
-		dbSupplier := &database.Supplier{Name: supplier.Name}
-		err := dbSupplier.AddInDB()
+		dbSupplier := database.GetSupplier(supplier.Name)
 		if err != nil {
 			fmt.Printf("%v\n", err)
 			c.JSON(400, gin.H{
