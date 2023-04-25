@@ -32,5 +32,8 @@ func StartServer() {
 	router.GET("/api/supplier/:id", GetSupplierById)
 	router.POST("/api/supplier", PostSupplier)
 
+	router.POST("/api/report", PostReport)
+	router.GET("/api/tips", GetTips)
+
 	router.Run()
 }

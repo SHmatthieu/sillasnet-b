@@ -49,6 +49,10 @@ type PostSupplierRequest struct {
 	Suppliers []Supplier
 }
 
+type PostReportRequest struct {
+	Text string
+}
+
 type Supplier struct {
 	ID   uint
 	Name string
@@ -144,13 +148,6 @@ func PostSoftware(c *gin.Context) {
 		return
 	}
 	user, err := GetUserFromRequest(c)
-
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": ERROR_FORMAT_MSG,
-		})
-		return
-	}
 
 	if err != nil {
 		c.JSON(400, gin.H{
@@ -263,13 +260,6 @@ func PostHardware(c *gin.Context) {
 		return
 	}
 
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": ERROR_FORMAT_MSG,
-		})
-		return
-	}
-
 	var req PostHardwareRequest
 	err = json.Unmarshal(row, &req)
 	if err != nil {
@@ -374,13 +364,6 @@ func PostSupplier(c *gin.Context) {
 		return
 	}
 
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": ERROR_FORMAT_MSG,
-		})
-		return
-	}
-
 	var req PostSupplierRequest
 	err = json.Unmarshal(row, &req)
 	if err != nil {
@@ -405,5 +388,55 @@ func PostSupplier(c *gin.Context) {
 
 	c.JSON(200, gin.H{
 		"message": "ok",
+	})
+}
+
+func PostReport(c *gin.Context) {
+	row, err := c.GetRawData()
+	if err != nil {
+		c.JSON(400, gin.H{
+			"message": ERROR_FORMAT_MSG,
+		})
+		return
+	}
+	user, err := GetUserFromRequest(c)
+
+	if err != nil {
+		c.JSON(400, gin.H{
+			"message": ERROR_FORMAT_MSG,
+		})
+		return
+	}
+
+	var req PostReportRequest
+	err = json.Unmarshal(row, &req)
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		c.JSON(400, gin.H{
+			"message": "error supplier format",
+		})
+		return
+	}
+
+	report := database.GetReport(req.Text)
+	user.AddReport(report)
+
+	c.JSON(200, gin.H{
+		"message": "ok",
+	})
+}
+
+func GetTips(c *gin.Context) {
+	dbtips := database.GetAllTips()
+	tips := make([]string, 0)
+	for _, tip := range dbtips {
+		if len(tip.Text) > 0 {
+			fmt.Println(len(tip.Text))
+			tips = append(tips, tip.Text)
+		}
+	}
+
+	c.JSON(200, gin.H{
+		"Tips": tips,
 	})
 }

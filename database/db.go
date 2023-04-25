@@ -20,6 +20,7 @@ type User struct {
 	Softwares     []*Software `gorm:"many2many:user_softwares;"`
 	Hardwares     []*Hardware `gorm:"many2many:user_hardwares;"`
 	Suppliers     []*Supplier `gorm:"many2many:user_suppliers;"`
+	Reports       []*Report   `gorm:"many2many:user_reports;"`
 }
 
 type Software struct {
@@ -39,6 +40,15 @@ type Supplier struct {
 	Users []*User `gorm:"many2many:user_suppliers;"`
 	Name  string  `gorm:"index:idx_name,unique"`
 }
+type Tip struct {
+	gorm.Model
+	Text string
+}
+type Report struct {
+	gorm.Model
+	Text  string
+	Users []*User `gorm:"many2many:user_reports;"`
+}
 
 func (user *User) AddSoftware(software *Software) {
 
@@ -55,6 +65,12 @@ func (user *User) AddSupplier(supplier *Supplier) {
 	mydb.Model(user).Update("Suppliers", append(user.Suppliers, supplier))
 
 }
+
+func (user *User) AddReport(report *Report) {
+
+	mydb.Model(user).Update("Reports", append(user.Reports, report))
+
+}
 func InitDB() error {
 	dsn := "usersec1:password@tcp(127.0.0.1:3306)/projecttest2?charset=utf8mb4&parseTime=True&loc=Local"
 	var err error
@@ -63,7 +79,7 @@ func InitDB() error {
 		return err
 	}
 
-	err = mydb.AutoMigrate(&Software{}, &Hardware{}, &Supplier{}, &User{})
+	err = mydb.AutoMigrate(&Report{}, &Tip{}, &Software{}, &Hardware{}, &Supplier{}, &User{})
 	if err != nil {
 		return err
 	}
@@ -152,4 +168,24 @@ func GetSupplier(name string) *Supplier {
 
 	mydb.Create(supplier)
 	return supplier
+}
+
+// Create a new report
+func GetReport(text string) *Report {
+	report := &Report{Text: text}
+	mydb.Create(report)
+	return report
+}
+
+// Create a new tip
+func GetTip(text string) *Tip {
+	tip := &Tip{Text: text}
+	mydb.Create(tip)
+	return tip
+}
+
+func GetAllTips() []Tip {
+	var tips []Tip
+	mydb.Find(&tips)
+	return tips
 }
